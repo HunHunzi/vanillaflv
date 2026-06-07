@@ -1,6 +1,5 @@
 import MSEController from "./mse/MSEController";
 import FlvPlayer from "./player/FlvPlayer";
-import HlsPlayer from "./player/HLSPlayer";
 
 class Player {
   constructor(videoElement, initParams) {

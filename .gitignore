@@ -1,5 +1,7 @@
-# Draw.io backup files
+# Draw.io backup/temp files
 *.drawio.bkp
+*.drawio.dtmp
+.*.drawio.dtmp
 
 # Logs
 logs

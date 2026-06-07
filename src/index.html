@@ -1,66 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>视频播放器</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        padding: 20px;
-      }
-      .controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-      }
-      input[type="text"] {
-        padding: 8px;
-        width: 300px;
-        font-size: 14px;
-      }
-      input[type="file"] {
-        font-size: 14px;
-      }
-      button {
-        padding: 8px 20px;
-        font-size: 14px;
-        cursor: pointer;
-      }
-      .video-container {
-        width: 640px;
-        height: 360px;
-        background: #000;
-      }
-      video {
-        width: 100%;
-        height: 100%;
-        display: block;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>视频播放器</h1>
-    <div class="controls">
-      <input type="text" id="videoUrl" placeholder="请输入视频 URL" />
-      <input type="file" id="flvInput" accept=".flv" />
-      <button id="btnPlay" onclick="playVideo()">播放</button>
-      <button id="btnPause" onclick="togglePause()" disabled>暂停</button>
-      <button id="btnStop" onclick="stopVideo()" disabled>停止</button>
-    </div>
-    <div class="video-container">
-      <video id="videoPlayer" controls></video>
-    </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>视频播放器</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    input[type="text"] {
+      padding: 8px;
+      width: 300px;
+      font-size: 14px;
+    }
+    input[type="file"] {
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 20px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .video-container {
+      width: 640px;
+      height: 360px;
+      background: #000;
+      margin-bottom: 20px;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    /* 日志面板样式 */
+    #logPanel {
+      width: 640px;
+      height: 200px;
+      border: 1px solid #ccc;
+      padding: 10px;
+      overflow-y: auto;
+      background: #f8f8f8;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .log-info { color: #333; }
+    .log-warn { color: #e6a23c; }
+    .log-error { color: #f56c6c; }
+  </style>
+</head>
+<body>
+  <h1>视频播放器</h1>
+  <div class="controls">
+    <input type="text" id="videoUrl" placeholder="请输入视频 URL" />
+    <input type="file" id="flvInput" accept=".flv" />
+    <button id="btnPlay" onclick="playVideo()">播放</button>
+    <button id="btnPause" onclick="togglePause()" disabled>暂停</button>
+    <button id="btnStop" onclick="stopVideo()" disabled>停止</button>
+    <button onclick="clearLog()">清空日志</button>
+  </div>
+  <div class="video-container">
+    <video id="videoPlayer" controls></video>
+  </div>
 
-    <script>
-      //import PlayerDemo from "./index.js";
-      // import PlayerDemo from "./index.js";
+  <!-- 页面日志输出容器 -->
+  <div id="logPanel"></div>
 
-      let player = null;
+  <script>
+    // 日志面板元素
+    const logPanel = document.getElementById('logPanel');
 
-      // 初始化播放器
+    // 格式化日志内容
+    function formatLog(args) {
+      return args.map(item => {
+        if (typeof item === 'object') {
+          try {
+            return JSON.stringify(item, null, 2);
+          } catch (e) {
+            return String(item);
+          }
+        }
+        return String(item);
+      }).join(' ');
+    }
+
+    // 页面追加日志
+    function appendLog(text, type = 'log-info') {
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${time}] ${text}`;
+      logPanel.appendChild(div);
+      // 滚动到最新日志
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    // 重写 console 方法，同时输出到控制台 + 页面
+    const originLog = console.log;
+    const originWarn = console.warn;
+    const originError = console.error;
+
+    console.log = function(...args) {
+      originLog.apply(console, args);
+      appendLog(formatLog(args), 'log-info');
+    };
+    console.warn = function(...args) {
+      originWarn.apply(console, args);
+      appendLog(formatLog(args), 'log-warn');
+    };
+    console.error = function(...args) {
+      originError.apply(console, args);
+      appendLog(formatLog(args), 'log-error');
+    };
+
+    // 清空日志
+    function clearLog() {
+      logPanel.innerHTML = '';
+    }
+
+    // ========== 原有播放器代码 ==========
+    let player = null;
+
+    // 初始化播放器
+    // 初始化播放器
       function initPlayer(videoUrl) {
         player = new PlayerDemo();
         const videoElement = document.getElementById("videoPlayer");
@@ -71,50 +141,57 @@
         });
       }
 
-      function setButtonState(playing) {
-        document.getElementById("btnPlay").disabled = playing;
-        document.getElementById("btnPause").disabled = !playing;
-        document.getElementById("btnStop").disabled = !playing;
-        document.getElementById("btnPause").textContent = "暂停";
-      }
 
-      function playVideo() {
-        const fileInput = document.getElementById("flvInput");
-        const urlInput = document.getElementById("videoUrl");
-        const file = fileInput.files[0];
-        let videoUrl = "";
-        if (file) {
-          videoUrl = URL.createObjectURL(file);
-        } else if (urlInput.value.trim()) {
-          videoUrl = urlInput.value.trim();
-        } else {
-          alert("请选择一个 FLV 文件，或在输入框中填写 URL");
-          return;
-        }
-        initPlayer(videoUrl);
+    function setButtonState(playing) {
+      document.getElementById("btnPlay").disabled = playing;
+      document.getElementById("btnPause").disabled = !playing;
+      document.getElementById("btnStop").disabled = !playing;
+      document.getElementById("btnPause").textContent = "暂停";
+    }
+
+    function playVideo() {
+      const fileInput = document.getElementById("flvInput");
+      const urlInput = document.getElementById("videoUrl");
+      const file = fileInput.files[0];
+      let videoUrl = "";
+      if (file) {
+        videoUrl = URL.createObjectURL(file);
+        console.log('读取本地FLV文件');
+      } else if (urlInput.value.trim()) {
+        videoUrl = urlInput.value.trim();
+        console.log('读取网络视频地址');
+      } else {
+        alert("请选择一个 FLV 文件，或在输入框中填写 URL");
+        return;
+      }
+      initPlayer(videoUrl);
+      player.play();
+      setButtonState(true);
+      console.log('开始播放视频');
+    }
+
+    function togglePause() {
+      if (!player) return;
+      const btn = document.getElementById("btnPause");
+      const video = document.getElementById("videoPlayer");
+      if (video.paused) {
         player.play();
-        setButtonState(true);
+        btn.textContent = "暂停";
+        console.log('继续播放');
+      } else {
+        player.pause();
+        btn.textContent = "继续";
+        console.log('暂停播放');
       }
+    }
 
-      function togglePause() {
-        if (!player) return;
-        const btn = document.getElementById("btnPause");
-        const video = document.getElementById("videoPlayer");
-        if (video.paused) {
-          player.play();
-          btn.textContent = "暂停";
-        } else {
-          player.pause();
-          btn.textContent = "继续";
-        }
-      }
-
-      function stopVideo() {
-        if (!player) return;
-        player.stop();
-        player = null;
-        setButtonState(false);
-      }
-    </script>
-  </body>
+    function stopVideo() {
+      if (!player) return;
+      player.stop();
+      player = null;
+      setButtonState(false);
+      console.log('停止播放，销毁播放器实例');
+    }
+  </script>
+</body>
 </html>

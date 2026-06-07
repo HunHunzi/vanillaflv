@@ -48,7 +48,7 @@ class MSEController {
   }
 
   onInitSegment(data) {
-    console.log("[MSE] 收到 initSegment", data);
+    console.log("[MSE] 收到 initSegment");
     if (data.audioMoov) this.pendingInit.audioMoov = data.audioMoov;
     if (data.audioCodec) this.pendingInit.audioCodec = data.audioCodec;
     if (data.videoMoov) this.pendingInit.videoMoov = data.videoMoov;
@@ -60,7 +60,7 @@ class MSEController {
   }
 
   _applyInitData(data) {
-    console.log("[MSE] 执行 applyInitData", data);
+    console.log("[MSE] 执行 applyInitData");
     const { audioMoov, videoMoov, audioCodec, videoCodec } = data;
 
     if (audioMoov && audioCodec && !this.scheduler.sourceBuffers.audio) {
@@ -81,6 +81,26 @@ class MSEController {
       const sb = this.mediaSource.addSourceBuffer(mimeType);
       this.scheduler.register(type, sb);
       console.log(`[MSE] ✅ SourceBuffer 创建成功 [${type}] ${mimeType}`);
+
+      if (type === 'video') {
+        // updateend 是 video.buffered 更新的唯一可靠时机
+        // moov append 完成后 buffered 还是空的，所以用 removeEventListener 持续等到第一个真实分片
+        const onFirstContent = () => {
+          const buf = this.video.buffered;
+          if (!buf.length) return;
+          sb.removeEventListener('updateend', onFirstContent);
+
+          const start = buf.start(0);
+          const end = buf.end(0);
+          if (start > 0.5 && this.video.currentTime < start) {
+            // PTS 不从 0 起（中途接入直播），跳到末尾 - 3s 追直播边沿
+            const target = Math.max(start, end - 3);
+            console.log(`[MSE] 🚀 直播对齐 start=${start.toFixed(2)}s → seek=${target.toFixed(2)}s`);
+            //this.video.currentTime = target;
+          }
+        };
+        sb.addEventListener('updateend', onFirstContent);
+      }
     } catch (e) {
       console.error(`[MSE] ❌ 创建SB失败 [${type}]`, e);
     }
@@ -89,7 +109,7 @@ class MSEController {
   // 🔥 打点：是否收到分片数据
   onFragParsing(data) {
     const { type, data: fragment } = data;
-    console.log(`[MSE] 收到分片 => ${type} 大小=${fragment.byteLength} data =${data}`);
+    console.log(`[MSE] 收到分片 => ${type} 大小=${fragment.byteLength} `);
     this.scheduler.push(type, fragment);
   }
 
