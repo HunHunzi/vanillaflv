@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>视频播放器</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      input[type="text"] {
+        padding: 8px;
+        width: 300px;
+        font-size: 14px;
+      }
+      input[type="file"] {
+        font-size: 14px;
+      }
+      button {
+        padding: 8px 20px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+      .video-container {
+        width: 640px;
+        height: 360px;
+        background: #000;
+      }
+      video {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>视频播放器</h1>
+    <div class="controls">
+      <input type="text" id="videoUrl" placeholder="请输入视频 URL" />
+      <input type="file" id="flvInput" accept=".flv" />
+      <button id="btnPlay" onclick="playVideo()">播放</button>
+      <button id="btnPause" onclick="togglePause()" disabled>暂停</button>
+      <button id="btnStop" onclick="stopVideo()" disabled>停止</button>
+    </div>
+    <div class="video-container">
+      <video id="videoPlayer" controls></video>
+    </div>
+
+    <script>
+      //import PlayerDemo from "./index.js";
+      // import PlayerDemo from "./index.js";
+
+      let player = null;
+
+      // 初始化播放器
+      function initPlayer(videoUrl) {
+        player = new PlayerDemo();
+        const videoElement = document.getElementById("videoPlayer");
+        player.bindVideoElement(videoElement); // 绑定 HTMLVideoElement
+        player.init({
+          streamType: "flv",
+          source: videoUrl,
+        });
+      }
+
+      function setButtonState(playing) {
+        document.getElementById("btnPlay").disabled = playing;
+        document.getElementById("btnPause").disabled = !playing;
+        document.getElementById("btnStop").disabled = !playing;
+        document.getElementById("btnPause").textContent = "暂停";
+      }
+
+      function playVideo() {
+        const fileInput = document.getElementById("flvInput");
+        const urlInput = document.getElementById("videoUrl");
+        const file = fileInput.files[0];
+        let videoUrl = "";
+        if (file) {
+          videoUrl = URL.createObjectURL(file);
+        } else if (urlInput.value.trim()) {
+          videoUrl = urlInput.value.trim();
+        } else {
+          alert("请选择一个 FLV 文件，或在输入框中填写 URL");
+          return;
+        }
+        initPlayer(videoUrl);
+        player.play();
+        setButtonState(true);
+      }
+
+      function togglePause() {
+        if (!player) return;
+        const btn = document.getElementById("btnPause");
+        const video = document.getElementById("videoPlayer");
+        if (video.paused) {
+          player.play();
+          btn.textContent = "暂停";
+        } else {
+          player.pause();
+          btn.textContent = "继续";
+        }
+      }
+
+      function stopVideo() {
+        if (!player) return;
+        player.stop();
+        player = null;
+        setButtonState(false);
+      }
+    </script>
+  </body>
+</html>
