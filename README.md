@@ -1,6 +1,25 @@
 # vanillaflv
 
-一个基于 **MediaSource Extensions (MSE)** 和 **Web Worker** 实现的轻量级浏览器端 FLV 视频播放器。无需 Flash，零运行时依赖，纯原生 JavaScript 实现 FLV 流的加载、解析、重混与播放。
+> 一个人瞎搞出来的 FLV 播放器，毕设产物，代码不算优雅，但绝对适合新手入门。
+
+基于 **MediaSource Extensions (MSE)** 和 **Web Worker** 实现的轻量级浏览器端 FLV 视频播放器。无需 Flash，零运行时依赖，纯原生 JavaScript 手撸 FLV 解析、fMP4 重混和流式播放全流程。
+
+---
+
+## 写在前面
+
+这个项目是我毕业设计期间自研的，从零开始搭，没有用 flv.js 之类的现成库。功能比较基础，坑也不少，但正因为简单，**整个播放流程一目了然**，非常适合想搞懂「浏览器怎么播 FLV」的同学来读代码。
+
+如果你想了解：
+
+- `MediaSource Extension` 到底怎么用
+- FLV 格式长什么样，怎么一帧一帧解析
+- Web Worker 怎么配合主线程做零拷贝通信
+- fMP4 是什么，为什么 MSE 不能直接喂 FLV
+
+那这个项目应该能帮到你。
+
+---
 
 ## 特性
 
@@ -9,9 +28,13 @@
 - **零拷贝传输**：通过 Transferable Objects 在线程间转移 ArrayBuffer 所有权，避免数据拷贝
 - **流式加载**：基于 Fetch ReadableStream 边下边播，首帧延迟低
 - **背压控制**：BufferScheduler 动态调节 SourceBuffer 消费速率，防止内存溢出
-- **多格式支持**：FLV（完整实现）、MP4（直连播放）、HLS（框架预留）
+- **多格式支持**：FLV（完整实现）、MP4（直连播放）、HLS（框架预留，还没写完）
+
+---
 
 ## 架构原理
+
+整体流程其实不复杂，数据单向流动，每一层职责明确：
 
 ```text
 HTTP Server
@@ -19,22 +42,24 @@ HTTP Server
     ↓
 FlvLoader  ──  Fetch ReadableStream 逐块读取
     │  ArrayBuffer chunk
-    ↓  postMessage (Transferable)
+    ↓  postMessage (Transferable，零拷贝)
 FlvWorker  ─────────────────────────────────┐
     ├─ FlvCacher    ← FLV Tag 缓冲与边界对齐  │  Web Worker 线程
     ├─ FlvParser    ← 解析 FLV Tag，提取帧    │
     └─ FMp4Remux   ← 生成 initSegment/moof  │
                                             ┘
-    │  postMessage (Transferable)
+    │  postMessage (Transferable，零拷贝)
     ↓
 主线程 MSEController
     ├─ new MediaSource() + SourceBuffer
     └─ BufferScheduler  ← 背压控制 & 缓冲区管理
 ```
 
+---
+
 ## 快速开始
 
-**环境要求**：Node.js ≥ 16，现代浏览器（支持 MSE + Fetch Streams）
+**环境要求**：Node.js ≥ 16，现代浏览器（Chrome / Firefox / Edge 均可）
 
 ```bash
 # 安装依赖
@@ -46,6 +71,8 @@ npm start
 # 打包 SDK（输出 dist/bundle.js，UMD 格式）
 npm run build
 ```
+
+---
 
 ## API 参考
 
@@ -107,6 +134,8 @@ player.destroy(); // 销毁实例，释放所有资源
 </html>
 ```
 
+---
+
 ## 目录结构
 
 ```text
@@ -150,35 +179,41 @@ player.destroy(); // 销毁实例，释放所有资源
 └── package.json
 ```
 
+---
+
 ## 技术说明
 
 ### FLV 格式
 
-FLV 文件由 9 字节 Header 与若干 Tag 串联组成。每个 Tag 包含：
+FLV 文件结构其实很简单：9 字节 Header + 若干 Tag 首尾相连。每个 Tag 长这样：
 
 - **Tag Type**（1 字节）：`0x09` 视频 / `0x08` 音频 / `0x12` Script 数据
 - **Data Size**（3 字节）：Tag 数据长度
 - **Timestamp**（4 字节，单位 ms）：解码时间戳
 - **Tag Data**：编码帧数据（H.264 / AAC）
 
-`FlvParser` 逐 Tag 解析，提取 SPS/PPS、AAC Config 和音视频帧，交由 `FMp4Remux` 封装为 fMP4。
+`FlvParser` 逐 Tag 顺序解析，提取 SPS/PPS、AAC Config 和音视频帧，传给 `FMp4Remux` 封装成 fMP4 喂给 MSE。
 
-### fMP4 重混
+### 为什么要重混成 fMP4？
 
-MSE SourceBuffer 要求喂入 **fragmented MP4（fMP4）** 格式：
+MSE 的 SourceBuffer 不认识 FLV，只接受 **fragmented MP4（fMP4）** 格式。所以需要一个重混步骤：
 
-1. **initSegment**（`ftyp + moov`）：包含视频分辨率、采样率等编解码参数，播放前一次性发送
-2. **Fragment**（`moof + mdat`）：每帧/每组帧对应一个 Fragment，持续 append
+1. **initSegment**（`ftyp + moov`）：播放前一次性发送，告诉浏览器视频分辨率、采样率等参数
+2. **Fragment**（`moof + mdat`）：每帧/每组帧对应一个，源源不断 append 进去
 
-### 背压控制策略
+这一步是整个项目最复杂的部分，代码在 `src/remux/` 里，感兴趣可以重点看。
 
-`BufferScheduler` 每 500 ms 检查 SourceBuffer 缓冲时长：
+### 背压控制
+
+光把数据喂进去还不够，喂太快会撑爆内存。`BufferScheduler` 每 500ms 检查一次缓冲时长：
 
 | 缓冲状态 | 动作 |
 | --- | --- |
-| > 30 s | 暂停消费，等待播放头追上 |
+| > 30 s | 暂停消费，等播放头追上来 |
 | < 10 s | 恢复消费 |
-| SourceBuffer 已满 | 删除已播放段（`remove(0, currentTime - 5)`） |
+| SourceBuffer 已满 | 删除已播放的部分（`remove(0, currentTime - 5)`） |
+
+---
 
 ## 浏览器兼容性
 
@@ -189,6 +224,21 @@ MSE SourceBuffer 要求喂入 **fragmented MP4（fMP4）** 格式：
 | Web Worker + Transferable | 4+ | 4+ | 12+ | 5+ |
 
 > FLV 源需以 **H.264 + AAC** 编码，且服务端需允许 CORS 跨域请求。
+
+---
+
+## 已知局限
+
+毕竟是个人自研项目，有些地方还比较粗糙：
+
+- HLS 支持只有框架，尚未实现
+- 没有做 seek（跳转进度）支持
+- 错误处理比较简陋，生产环境慎用
+- 没有单元测试覆盖核心解析逻辑
+
+欢迎 PR 和 Issue，也欢迎单纯来学习交流。
+
+---
 
 ## License
 
