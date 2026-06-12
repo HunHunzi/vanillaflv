@@ -47,6 +47,7 @@ class MSEController {
     }
   }
 
+  // onInitSegment（收到编解码信息）
   onInitSegment(data) {
     console.log("[MSE] 收到 initSegment");
     if (data.audioMoov) this.pendingInit.audioMoov = data.audioMoov;
@@ -54,6 +55,7 @@ class MSEController {
     if (data.videoMoov) this.pendingInit.videoMoov = data.videoMoov;
     if (data.videoCodec) this.pendingInit.videoCodec = data.videoCodec;
 
+    // 只有mse就绪才打开
     if (this.isOpen) {
       this._applyInitData(this.pendingInit);
     }
@@ -96,7 +98,7 @@ class MSEController {
             // PTS 不从 0 起（中途接入直播），跳到末尾 - 3s 追直播边沿
             const target = Math.max(start, end - 3);
             console.log(`[MSE] 🚀 直播对齐 start=${start.toFixed(2)}s → seek=${target.toFixed(2)}s`);
-            //this.video.currentTime = target;
+            this.video.currentTime = target;
           }
         };
         sb.addEventListener('updateend', onFirstContent);

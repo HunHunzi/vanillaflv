@@ -47,6 +47,7 @@ class FlvCacher {
       cache.set(this.headCache, 0);
       cache.set(data, this.headCache.length);
       data = cache;
+      this.headCache = null;  // ←清空，防止下次再合并
     }
     // 如果有缓存的头部数据，则将头部数据和新数据合并
     if (this.headCache) {
